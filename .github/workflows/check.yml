@@ -1,0 +1,24 @@
+name: Go Checks
+on: [push]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+
+      - name: Install tools
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+      - name: Build
+        run: go build .
+
+      - name: Test
+        run: go test -race -coverprofile=coverage.txt .
+
+      - name: Lint
+        run: golangci-lint run
+
+      - name: Security scan
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest .
