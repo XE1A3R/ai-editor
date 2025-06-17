@@ -236,7 +236,7 @@ func main() {
 	// Генерация превью
 	if config.PreviewGeneration {
 		fmt.Println("Generating preview video...")
-		if err := generatePreview(outputVideo, previewVideo, config); err != nil {
+		if err := generatePreview(outputVideo, previewVideo); err != nil {
 			log.Printf("Preview generation failed: %v", err)
 		} else {
 			fmt.Println("Preview generated:", previewVideo)
@@ -333,34 +333,6 @@ func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 			log.Printf("Audio detection error: %v", err)
 			return nil
 		}
-
-		// Прогресс-бар для аудио анализа
-		go func() {
-			startTime := time.Now()
-			duration, err := getVideoDuration(videoPath)
-			if err != nil {
-				duration = 60 // Значение по умолчанию
-			}
-
-			ticker := time.NewTicker(500 * time.Millisecond)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ticker.C:
-					if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-						return
-					}
-
-					elapsed := time.Since(startTime).Seconds()
-					progress := int((elapsed / duration) * 100)
-					if progress > 100 {
-						progress = 100
-					}
-					printProgressBar(progress, 100, "Analyzing audio", "Processing")
-				}
-			}
-		}()
 
 		tee := io.TeeReader(stderr, cacheFile)
 		scanner = bufio.NewScanner(tee)
@@ -575,7 +547,6 @@ func detectVideoEvents(videoPath string, config Config) []ClipSegment {
 		})
 	}
 
-
 	// Сохраняем результаты в кэш
 	if jsonData, err := json.MarshalIndent(events, "", "  "); err == nil {
 		if err := os.WriteFile(cacheFileName, jsonData, 0644); err == nil {
@@ -620,33 +591,6 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 
 		scanner := bufio.NewScanner(stderr)
 		reScene := regexp.MustCompile(`scene:(\d+\.\d+)`)
-
-		// Прогресс-бар для расчета порога
-		go func() {
-			duration, err := getVideoDuration(videoPath)
-			if err != nil {
-				duration = 60
-			}
-			startTime := time.Now()
-			ticker := time.NewTicker(500 * time.Millisecond)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ticker.C:
-					if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-						return
-					}
-
-					elapsed := time.Since(startTime).Seconds()
-					progress := int((elapsed / duration) * 100)
-					if progress > 100 {
-						progress = 100
-					}
-					printProgressBar(progress, 100, "  Calculating motion threshold", "Processing")
-				}
-			}
-		}()
 
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -725,33 +669,6 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 	events := []float64{}
 	reTime := regexp.MustCompile(`pts_time:(\d+\.\d+)`)
 
-	// Прогресс-бар для детекции движения
-	go func() {
-		duration, err := getVideoDuration(videoPath)
-		if err != nil {
-			duration = 60
-		}
-		startTime := time.Now()
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-					return
-				}
-
-				elapsed := time.Since(startTime).Seconds()
-				progress := int((elapsed / duration) * 100)
-				if progress > 100 {
-					progress = 100
-				}
-				printProgressBar(progress, 100, "  Detecting motion events", "Processing")
-			}
-		}
-	}()
-
 	for scanner.Scan() {
 		line := scanner.Text()
 		if matches := reTime.FindStringSubmatch(line); matches != nil {
@@ -771,7 +688,17 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 
 	// Сохранение в кэш
 	if jsonData, err := json.MarshalIndent(groupedEvents, "", "  "); err == nil {
-		os.WriteFile(cacheFileName, jsonData, 0644)
+		func() error {
+			f, err := os.OpenFile(cacheFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+			if err != nil {
+				return err
+			}
+			_, err = f.Write(jsonData)
+			if err1 := f.Close(); err1 != nil && err == nil {
+				err = err1
+			}
+			return err
+		}()
 	}
 
 	printProgressBar(100, 100, "  Detecting motion events", "Complete")
@@ -818,27 +745,6 @@ func maxFloat(a, b float64) float64 {
 	return b
 }
 
-func minFloat(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// Вспомогательные функции
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // Детекция игровых событий (имитация) с прогресс-баром
 func detectGameEvents(videoPath string, config Config) []ClipSegment {
@@ -1148,34 +1054,6 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	// Прогресс-бар для финальной сборки
-	go func() {
-		startTime := time.Now()
-		duration, err := getVideoDuration(absInputPath)
-		if err != nil {
-			duration = 60
-		}
-
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-					return
-				}
-
-				elapsed := time.Since(startTime).Seconds()
-				progress := int((elapsed / duration) * 100)
-				if progress > 100 {
-					progress = 100
-				}
-				printProgressBar(progress, 100, "  Assembling final video", "Processing")
-			}
-		}
-	}()
-
 	if err := cmd.Run(); err != nil {
 		log.Printf("\rFFmpeg error output:\n%s", stderr.String())
 		return fmt.Errorf("video assembly failed: %w", err)
@@ -1192,7 +1070,7 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 }
 
 // Генерация превью-видео (короткая версия)
-func generatePreview(inputPath, outputPath string, config Config) error {
+func generatePreview(inputPath, outputPath string) error {
 	// Получаем длительность видео
 	duration, err := getVideoDuration(inputPath)
 	if err != nil {
@@ -1420,25 +1298,6 @@ func detectSpeechActivity(videoPath string, config Config) []ClipSegment {
 
 	printProgressBar(100, 100, "Detecting speech", "Complete")
 	return segments
-}
-
-// Рассчитываем уровень фонового шума
-func calculateNoiseFloor(samples []int16, sampleRate int) float64 {
-	// Анализируем первые 500 мс
-	analysisFrames := sampleRate / 2
-	if len(samples) < analysisFrames {
-		analysisFrames = len(samples)
-	}
-
-	// Рассчитываем RMS для начального сегмента
-	sumSquares := 0.0
-	for i := 0; i < analysisFrames; i++ {
-		sample := float64(samples[i]) / 32768.0
-		sumSquares += sample * sample
-	}
-
-	rms := math.Sqrt(sumSquares / float64(analysisFrames))
-	return rms * 1.5 // Добавляем запас
 }
 
 // Комбинирование аудио-событий и речевой активности
