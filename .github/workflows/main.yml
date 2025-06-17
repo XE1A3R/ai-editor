@@ -15,19 +15,24 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.24'
+
+    - name: Prepare artifacts directory
+      run: mkdir -p artifacts
 
     - name: Build for Linux
       run: |
-        # Проверяем структуру проекта (отладка)
-        ls -la
-        
-        # Сборка для Linux (путь нужно уточнить!)
-        GOOS=linux GOARCH=amd64 go build -o myapp-linux-amd64 .
-        GOOS=linux GOARCH=arm64 go build -o myapp-linux-arm64 .
-        
-        mkdir -p artifacts
-        mv myapp-linux-* artifacts/
+        GOOS=linux GOARCH=amd64 go build -o auto-editor .
+        mv auto-editor artifacts/
+
+    - name: Build for Windows
+      run: |
+        GOOS=windows GOARCH=amd64 go build -o auto-editor.exe .
+        mv auto-editor.exe artifacts/
+
+    - name: Copy common files
+      run: |
+        cp config.json artifacts/
 
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v1
