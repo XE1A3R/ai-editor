@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'  # Запускать при создании тега вида v1.0.0
 
+env:
+  # УКАЖИТЕ ПРАВИЛЬНЫЙ ПУТЬ К ВАШЕМУ MAIN-ПАКЕТУ ЗДЕСЬ ↓
+  MAIN_PKG: "./"  # По умолчанию смотрит в корень проекта
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,8 +23,17 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.4'  # Измените на нужную версию
+          go-version: '1.22'
           cache: true
+
+      - name: Debug project structure
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -la
+          echo "MAIN_PKG path: ${{ env.MAIN_PKG }}"
+          if [ -d "${{ env.MAIN_PKG }}" ]; then
+            ls -la "${{ env.MAIN_PKG }}"
+          fi
 
       - name: Build for ${{ matrix.os }}
         env:
@@ -28,14 +41,15 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           OUTPUT: myapp-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
         run: |
-          go build -ldflags="-s -w" -o ${{ env.OUTPUT }} ./cmd/main.go
-          echo "BINARY_NAME=${{ env.OUTPUT }}" >> $GITHUB_ENV
+          # Используем переменную MAIN_PKG
+          go build -ldflags="-s -w" -o $OUTPUT "${{ env.MAIN_PKG }}"
+          echo "Built: $(ls -lh $OUTPUT)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-binary
-          path: ${{ env.BINARY_NAME }}
+          path: ${{ env.OUTPUT }}
 
   release:
     needs: build
@@ -53,7 +67,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           body: |
-            Auto-generated release for version ${{ github.ref_name }}
-            Built binaries for Linux and Windows
-          files: |
-            artifacts/*-binary/*
+            Automated release for ${{ github.ref_name }}
+            Binaries for Linux and Windows
+          files: artifacts/*
