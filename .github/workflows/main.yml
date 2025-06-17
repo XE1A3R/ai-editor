@@ -22,7 +22,7 @@ jobs:
 
     - name: Build for Linux
       run: |
-        GOOS=linux GOARCH=amd64 go build -o auto-editor .
+        GOOS=linux GOARCH=amd64 go build -o ai-editor .
         mv auto-editor artifacts/
 
     # - name: Build for Windows
