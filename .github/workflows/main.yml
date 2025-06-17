@@ -25,10 +25,10 @@ jobs:
         GOOS=linux GOARCH=amd64 go build -o auto-editor .
         mv auto-editor artifacts/
 
-    - name: Build for Windows
-      run: |
-        GOOS=windows GOARCH=amd64 go build -o auto-editor.exe .
-        mv auto-editor.exe artifacts/
+    # - name: Build for Windows
+    #   run: |
+    #     GOOS=windows GOARCH=amd64 go build -o auto-editor.exe .
+    #     mv auto-editor.exe artifacts/
 
     - name: Copy common files
       run: |
