@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"image"
 	"io"
 	"io/ioutil"
 	"log"
@@ -23,48 +22,46 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"gocv.io/x/gocv"
 )
 
 // Конфигурация приложения
 type Config struct {
-	AudioAutoThreshold         bool     `json:"audio_auto_threshold"`
-	MotionAutoThreshold        bool     `json:"motion_auto_threshold"`
-	SpeechThresholdMultiplier  float64  `json:"speech_threshold_multiplier"` // 5.0
-	MinSpeechDuration          float64  `json:"min_speech_duration"`         // 0.3
-	MinSilenceDuration         float64  `json:"min_silence_duration"`
-	SpeechStartFrames          int      `json:"speech_start_frames"` // 3
-	SpeechEndFrames            int      `json:"speech_end_frames"`   // 5
-	MaxSpeechGap               float64  `json:"max_speech_gap"`
-	SpeechDetection            bool     `json:"speech_detection"`
-	MinMotionDuration          float64  `json:"min_motion_duration"`
-	NoiseFloor                 float64  `json:"noise_floor"` // Уровень фонового шума
-	AudioThreshold             float64  `json:"audio_threshold"`
-	MotionThreshold            float64  `json:"motion_threshold"`
-	FaceDetection              bool     `json:"face_detection"`
-	EmotionDetection           bool     `json:"emotion_detection"`
-	GameEventsEnabled          bool     `json:"game_events_enabled"`
-	MinClipDuration            float64  `json:"min_clip_duration"`
-	MaxClipDuration            float64  `json:"max_clip_duration"`
-	HighlightPadding           float64  `json:"highlight_padding"`
-	OutputResolution           string   `json:"output_resolution"`
-	OutputFPS                  int      `json:"output_fps"`
-	Bitrate                    string   `json:"Bitrate"`
-	Codec                      string   `json:"codec"`
-	ForceReencode              bool     `json:"force_reencode"`
-	FaceCascade                string   `json:"face_cascade"`
-	EmotionModel               string   `json:"emotion_model"`
-	EmotionLabels              []string `json:"emotion_labels"`
-	PositiveEmotions           []string `json:"positive_emotions"`
-	EmotionThreshold           float64  `json:"emotion_threshold"`
-	GameAPIEndpoint            string   `json:"game_api_endpoint"`
-	OutputDir                  string   `json:"output_dir"`
-	TempDir                    string   `json:"temp_dir"`
-	GPUAcceleration            bool     `json:"gpu_acceleration"`
-	PreviewGeneration          bool     `json:"preview_generation"`
-	TransitionDuration         float64  `json:"transition_duration"`
-	DebugMode                  bool     `json:"debug_mode"`
+	AudioAutoThreshold        bool     `json:"audio_auto_threshold"`
+	MotionAutoThreshold       bool     `json:"motion_auto_threshold"`
+	SpeechThresholdMultiplier float64  `json:"speech_threshold_multiplier"` // 5.0
+	MinSpeechDuration         float64  `json:"min_speech_duration"`         // 0.3
+	MinSilenceDuration        float64  `json:"min_silence_duration"`
+	SpeechStartFrames         int      `json:"speech_start_frames"` // 3
+	SpeechEndFrames           int      `json:"speech_end_frames"`   // 5
+	MaxSpeechGap              float64  `json:"max_speech_gap"`
+	SpeechDetection           bool     `json:"speech_detection"`
+	MinMotionDuration         float64  `json:"min_motion_duration"`
+	NoiseFloor                float64  `json:"noise_floor"` // Уровень фонового шума
+	AudioThreshold            float64  `json:"audio_threshold"`
+	MotionThreshold           float64  `json:"motion_threshold"`
+	FaceDetection             bool     `json:"face_detection"`
+	EmotionDetection          bool     `json:"emotion_detection"`
+	GameEventsEnabled         bool     `json:"game_events_enabled"`
+	MinClipDuration           float64  `json:"min_clip_duration"`
+	MaxClipDuration           float64  `json:"max_clip_duration"`
+	HighlightPadding          float64  `json:"highlight_padding"`
+	OutputResolution          string   `json:"output_resolution"`
+	OutputFPS                 int      `json:"output_fps"`
+	Bitrate                   string   `json:"Bitrate"`
+	Codec                     string   `json:"codec"`
+	ForceReencode             bool     `json:"force_reencode"`
+	FaceCascade               string   `json:"face_cascade"`
+	EmotionModel              string   `json:"emotion_model"`
+	EmotionLabels             []string `json:"emotion_labels"`
+	PositiveEmotions          []string `json:"positive_emotions"`
+	EmotionThreshold          float64  `json:"emotion_threshold"`
+	GameAPIEndpoint           string   `json:"game_api_endpoint"`
+	OutputDir                 string   `json:"output_dir"`
+	TempDir                   string   `json:"temp_dir"`
+	GPUAcceleration           bool     `json:"gpu_acceleration"`
+	PreviewGeneration         bool     `json:"preview_generation"`
+	TransitionDuration        float64  `json:"transition_duration"`
+	DebugMode                 bool     `json:"debug_mode"`
 }
 
 // Структура для хранения сегментов видео
@@ -180,18 +177,18 @@ func main() {
 	}
 
 	// Анализ аудио
-    func() {
-        defer wg.Done()
-        audioEvents = detectAudioEvents(*inputVideo, config)
+	func() {
+		defer wg.Done()
+		audioEvents = detectAudioEvents(*inputVideo, config)
 
-        // Дополнительная детекция речи
-        if config.SpeechDetection {
-            speechEvents := detectSpeechActivity(*inputVideo, config)
-            audioEvents = combineAudioEvents(audioEvents, speechEvents)
-        }
+		// Дополнительная детекция речи
+		if config.SpeechDetection {
+			speechEvents := detectSpeechActivity(*inputVideo, config)
+			audioEvents = combineAudioEvents(audioEvents, speechEvents)
+		}
 
-        fmt.Printf("Detected %d audio events\n", len(audioEvents))
-    }()
+		fmt.Printf("Detected %d audio events\n", len(audioEvents))
+	}()
 
 	// Анализ видео
 	func() {
@@ -253,41 +250,34 @@ func main() {
 // Загрузка конфигурации
 func loadConfig(path string) (Config, error) {
 	config := Config{
-		AudioThreshold:             -40.0,
-		MotionThreshold:            0.04,
-		AudioAutoThreshold:         true,
-		SpeechThresholdMultiplier:  5.0,
-		MinSilenceDuration:         0.3,
-		MinSpeechDuration:          0.3,
-		SpeechStartFrames:          3,
-		SpeechEndFrames:            5,
-		MaxSpeechGap:               0.5, // Объединять паузы короче 500ms
-		SpeechDetection:            true,
-		NoiseFloor:                 -60.0,
-		MotionAutoThreshold:        true,
-		MinMotionDuration:          0.5, // Минимальная длительность события движения
-		FaceDetection:              false,
-		EmotionDetection:           false,
-		GameEventsEnabled:          false,
-		MinClipDuration:            2.0,
-		MaxClipDuration:            10.0,
-		HighlightPadding:           1.0,
-		OutputResolution:           "",
-		OutputFPS:                  0,
-		Bitrate:                    "",
-		Codec:                      "libx264",
-		FaceCascade:                "models/haarcascade_frontalface_default.xml",
-		EmotionModel:               "models/emotion-ferplus-8.onnx",
-		EmotionLabels:              []string{"neutral", "happiness", "surprise", "sadness", "anger", "disgust", "fear", "contempt"},
-		PositiveEmotions:           []string{"happiness", "surprise"},
-		EmotionThreshold:           0.1,
-		GameAPIEndpoint:            "http://localhost:8080/events",
-		OutputDir:                  "output",
-		TempDir:                    "temp",
-		GPUAcceleration:            false,
-		PreviewGeneration:          false,
-		TransitionDuration:         0.5,
-		DebugMode:					false,
+		AudioThreshold:            -40.0,
+		MotionThreshold:           0.04,
+		AudioAutoThreshold:        true,
+		SpeechThresholdMultiplier: 5.0,
+		MinSilenceDuration:        0.3,
+		MinSpeechDuration:         0.3,
+		SpeechStartFrames:         3,
+		SpeechEndFrames:           5,
+		MaxSpeechGap:              0.5, // Объединять паузы короче 500ms
+		SpeechDetection:           true,
+		NoiseFloor:                -60.0,
+		MotionAutoThreshold:       true,
+		MinMotionDuration:         0.5, // Минимальная длительность события движения
+		GameEventsEnabled:         false,
+		MinClipDuration:           2.0,
+		MaxClipDuration:           10.0,
+		HighlightPadding:          1.0,
+		OutputResolution:          "",
+		OutputFPS:                 0,
+		Bitrate:                   "",
+		Codec:                     "libx264",
+		EmotionThreshold:          0.1,
+		OutputDir:                 "output",
+		TempDir:                   "temp",
+		GPUAcceleration:           false,
+		PreviewGeneration:         false,
+		TransitionDuration:        0.5,
+		DebugMode:                 false,
 	}
 
 	if _, err := os.Stat(path); err == nil {
@@ -351,17 +341,17 @@ func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 			if err != nil {
 				duration = 60 // Значение по умолчанию
 			}
-			
+
 			ticker := time.NewTicker(500 * time.Millisecond)
 			defer ticker.Stop()
-			
+
 			for {
 				select {
 				case <-ticker.C:
 					if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
 						return
 					}
-					
+
 					elapsed := time.Since(startTime).Seconds()
 					progress := int((elapsed / duration) * 100)
 					if progress > 100 {
@@ -585,11 +575,6 @@ func detectVideoEvents(videoPath string, config Config) []ClipSegment {
 		})
 	}
 
-	// Детекция лиц и эмоций
-	if config.FaceDetection {
-		faceEvents := detectFacesAndEmotions(videoPath, config)
-		events = append(events, faceEvents...)
-	}
 
 	// Сохраняем результаты в кэш
 	if jsonData, err := json.MarshalIndent(events, "", "  "); err == nil {
@@ -749,14 +734,14 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 		startTime := time.Now()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-ticker.C:
 				if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
 					return
 				}
-				
+
 				elapsed := time.Since(startTime).Seconds()
 				progress := int((elapsed / duration) * 100)
 				if progress > 100 {
@@ -840,326 +825,6 @@ func minFloat(a, b float64) float64 {
 	return b
 }
 
-
-// Детекция лиц и эмоций с помощью OpenCV
-func detectFacesAndEmotions(videoPath string, config Config) []ClipSegment {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Panic recovered in face detection: %v", r)
-		}
-	}()
-
-	// Открываем видеофайл
-	video, err := gocv.VideoCaptureFile(videoPath)
-	if err != nil {
-		log.Printf("Error opening video file: %v", err)
-		return nil
-	}
-	defer video.Close()
-
-	// Загружаем каскад для распознавания лиц
-	faceClassifier := gocv.NewCascadeClassifier()
-	defer faceClassifier.Close()
-
-	if !faceClassifier.Load(config.FaceCascade) {
-		log.Printf("Error loading face cascade: %s", config.FaceCascade)
-		return nil
-	}
-
-	// Загружаем модель для распознавания эмоций
-	var emotionNet gocv.Net
-	if config.EmotionDetection {
-		if _, err := os.Stat(config.EmotionModel); err == nil {
-			emotionNet = gocv.ReadNetFromONNX(config.EmotionModel)
-			if emotionNet.Empty() {
-				log.Printf("Failed to load emotion model: %s", config.EmotionModel)
-				config.EmotionDetection = false
-			} else {
-				log.Printf("Emotion model loaded successfully: %s", config.EmotionModel)
-				if config.GPUAcceleration {
-					emotionNet.SetPreferableBackend(gocv.NetBackendCUDA)
-					emotionNet.SetPreferableTarget(gocv.NetTargetCUDA)
-				} else {
-					emotionNet.SetPreferableBackend(gocv.NetBackendDefault)
-					emotionNet.SetPreferableTarget(gocv.NetTargetCPU)
-				}
-				
-				// Отладочная информация о слоях модели
-				if config.DebugMode {
-					layerNames := emotionNet.GetLayerNames()
-					log.Printf("Emotion model layers (%d): %v", len(layerNames), layerNames)
-				}
-			}
-		} else {
-			log.Printf("Emotion model not found: %s", config.EmotionModel)
-			config.EmotionDetection = false
-		}
-	}
-	defer emotionNet.Close()
-
-	fps := video.Get(gocv.VideoCaptureFPS)
-	if fps <= 0 {
-		fps = 30
-	}
-
-	frame := gocv.NewMat()
-	defer frame.Close()
-
-	events := []ClipSegment{}
-	frameCount := 0
-	lastFaceTime := -5.0
-	processingRate := int(fps / 5) // Обрабатываем 5 кадров в секунду
-
-	// Прогресс-бар
-	totalFrames := int(video.Get(gocv.VideoCaptureFrameCount))
-	if totalFrames <= 0 {
-		// Оценка длительности если метаданные недоступны
-		dur, _ := getVideoDuration(videoPath)
-		totalFrames = int(dur * fps)
-	}
-	if totalFrames <= 0 {
-		totalFrames = 1
-	}
-
-	printProgressBar(0, totalFrames, "  Face detection", "Starting")
-
-	for {
-		if ok := video.Read(&frame); !ok || frame.Empty() {
-			break
-		}
-
-		frameCount++
-
-		// Пропускаем кадры для ускорения обработки
-		if frameCount%processingRate != 0 {
-			continue
-		}
-
-		// Обновление прогресс-бара
-		if frameCount%50 == 0 {
-			printProgressBar(frameCount, totalFrames, "  Face detection", "Processing")
-		}
-
-		// Уменьшаем размер кадра для ускорения обработки
-		targetWidth := 640
-		targetHeight := 360
-		resized := gocv.NewMat()
-		gocv.Resize(frame, &resized, image.Point{X: targetWidth, Y: targetHeight}, 0, 0, gocv.InterpolationLinear)
-
-		// Рассчитываем коэффициенты масштабирования
-		scaleX := float64(frame.Cols()) / float64(targetWidth)
-		scaleY := float64(frame.Rows()) / float64(targetHeight)
-
-		// Преобразуем в grayscale
-		gray := gocv.NewMat()
-		gocv.CvtColor(resized, &gray, gocv.ColorBGRToGray)
-
-		// Детекция лиц с параметрами
-		minSize := image.Point{X: 50, Y: 50} // Уменьшенный минимальный размер
-		faces := faceClassifier.DetectMultiScaleWithParams(
-			gray,
-			1.1,   // scaleFactor
-			3,     // minNeighbors
-			0,     // flags
-			minSize,
-			image.Point{X: 500, Y: 500}, // maxSize
-		)
-		resized.Close()
-		gray.Close()
-
-		if len(faces) > 0 {
-			currentTime := float64(frameCount) / fps
-
-			// Регистрируем событие только если прошло достаточно времени с последнего
-			if currentTime > lastFaceTime+1.0 {
-				// Масштабируем координаты обратно на оригинальный размер
-				scaledFace := image.Rect(
-					int(float64(faces[0].Min.X)*scaleX),
-					int(float64(faces[0].Min.Y)*scaleY),
-					int(float64(faces[0].Max.X)*scaleX),
-					int(float64(faces[0].Max.Y)*scaleY),
-				)
-
-				// Проверяем границы
-				scaledFace = image.Rect(
-					maxInt(0, scaledFace.Min.X),
-					maxInt(0, scaledFace.Min.Y),
-					minInt(frame.Cols(), scaledFace.Max.X),
-					minInt(frame.Rows(), scaledFace.Max.Y),
-				)
-
-				// Пропускаем слишком маленькие лица
-				if scaledFace.Dx() < 30 || scaledFace.Dy() < 30 {
-					log.Printf("Skipping small face: %dx%d", scaledFace.Dx(), scaledFace.Dy())
-					continue
-				}
-
-				emotion := ""
-				emotionScore := 0.0
-
-				// Детекция эмоций только для достаточно крупных лиц
-				if config.EmotionDetection && !emotionNet.Empty() && scaledFace.Dx() >= 100 {
-					emotion, emotionScore = detectEmotion(frame, scaledFace, emotionNet, config)
-				}
-
-				// Формируем описание события
-				details := fmt.Sprintf("Face detected [%dx%d]", scaledFace.Dx(), scaledFace.Dy())
-				if emotion != "" {
-					details = fmt.Sprintf("Emotion: %s (%.2f) [%dx%d]", emotion, emotionScore, scaledFace.Dx(), scaledFace.Dy())
-				}
-
-				events = append(events, ClipSegment{
-					Start:   currentTime - config.HighlightPadding,
-					End:     currentTime + config.HighlightPadding,
-					Type:    "face",
-					Score:   0.9,
-					Emotion: emotion,
-					Details: details,
-				})
-
-				lastFaceTime = currentTime
-			}
-		}
-	}
-
-	printProgressBar(totalFrames, totalFrames, "  Face detection", "Complete")
-	return events
-}
-
-// Детекция эмоций для одного лица
-func detectEmotion(frame gocv.Mat, face image.Rectangle, net gocv.Net, config Config) (string, float64) {
-	padding := 20
-
-	// Проверка корректности координат лица
-	if face.Empty() || face.Dx() <= 0 || face.Dy() <= 0 {
-		log.Printf("Invalid face rectangle: %v", face)
-		return "", 0
-	}
-
-	expandedFace := image.Rect(
-		maxInt(0, face.Min.X-padding),
-		maxInt(0, face.Min.Y-padding),
-		minInt(frame.Cols(), face.Max.X+padding),
-		minInt(frame.Rows(), face.Max.Y+padding),
-	)
-
-	// Проверка корректности расширенной области
-	if expandedFace.Empty() || expandedFace.Dx() <= 10 || expandedFace.Dy() <= 10 {
-		log.Printf("Invalid expanded face region: %v (original: %v, frame: %dx%d)",
-			expandedFace, face, frame.Cols(), frame.Rows())
-		return "", 0
-	}
-
-	faceImg := frame.Region(expandedFace)
-	defer faceImg.Close()
-
-	if faceImg.Empty() {
-		log.Printf("Empty face image after region crop")
-		return "", 0
-	}
-
-	// Сохраняем изображение лица для отладки
-	if config.DebugMode {
-		debugPath := fmt.Sprintf("debug_face_%d.jpg", time.Now().UnixNano())
-		if ok := gocv.IMWrite(debugPath, faceImg); ok {
-			log.Printf("Saved debug face image: %s", debugPath)
-		}
-	}
-
-	// Изменяем размер до 64x64
-	resized := gocv.NewMat()
-	gocv.Resize(faceImg, &resized, image.Point{X: 64, Y: 64}, 0, 0, gocv.InterpolationCubic)
-	defer resized.Close()
-
-	// Преобразуем в grayscale (так как модель ожидает одноканальное изображение)
-	gray := gocv.NewMat()
-	gocv.CvtColor(resized, &gray, gocv.ColorBGRToGray)
-	defer gray.Close()
-
-	// Конвертируем в float32 и нормализуем: /255 для диапазона [0,1]
-	normalized := gocv.NewMat()
-	gray.ConvertTo(&normalized, gocv.MatTypeCV32F)
-	normalized.DivideFloat(255.0)
-	defer normalized.Close()
-
-	// Проверка типа данных
-	if normalized.Type() != gocv.MatTypeCV32F {
-		log.Printf("Invalid matrix type: %v, expected CV32F", normalized.Type())
-		return "", 0
-	}
-
-	// Создаем blob для одноканального изображения
-	blob := gocv.BlobFromImage(normalized, 1.0, image.Pt(0, 0), gocv.NewScalar(0, 0, 0, 0), false, false)
-	defer blob.Close()
-
-	// Подаем в нейросеть
-	net.SetInput(blob, "")
-	prob := net.Forward("")
-	defer prob.Close()
-
-	// Получаем результаты
-	if prob.Empty() {
-		log.Printf("Empty probability matrix")
-		return "", 0
-	}
-
-    // Проверяем размерность выходных данных
-    sz := prob.Size()
-    totalElements := 1
-    for _, d := range sz {
-        totalElements *= int(d)
-    }
-    
-    // Проверяем, что общее количество элементов соответствует количеству эмоций
-    if totalElements < len(config.EmotionLabels) {
-        log.Printf("Unexpected output size: %v, total elements: %d, expected at least %d",
-            sz, totalElements, len(config.EmotionLabels))
-        return "", 0
-    }
-
-	data, err := prob.DataPtrFloat32()
-	if err != nil {
-		log.Printf("DataPtrFloat32 error: %v", err)
-		return "", 0
-	}
-
-	// Вычисляем softmax для нормализации вероятностей
-	sum := float32(0.0)
-	for i := 0; i < len(config.EmotionLabels); i++ {
-		sum += float32(math.Exp(float64(data[i])))
-	}
-
-	// Находим эмоцию с максимальной вероятностью
-	maxIndex := 0
-	maxVal := float32(0.0)
-	probabilities := make([]float32, len(config.EmotionLabels))
-	
-	for i := 0; i < len(config.EmotionLabels); i++ {
-		probabilities[i] = float32(math.Exp(float64(data[i]))) / sum
-		if probabilities[i] > maxVal {
-			maxVal = probabilities[i]
-			maxIndex = i
-		}
-	}
-
-	// Отладочный вывод вероятностей
-	if config.DebugMode {
-		log.Printf("Emotion probabilities:")
-		for i, label := range config.EmotionLabels {
-			log.Printf("  %s: %.4f", label, probabilities[i])
-		}
-	}
-
-	// Возвращаем эмоцию если она превышает порог
-	if float64(maxVal) >= config.EmotionThreshold {
-		emotion := config.EmotionLabels[maxIndex]
-		// log.Printf("Emotion detected: %s (%.2f)", emotion, maxVal)
-		return emotion, float64(maxVal)
-	}
-
-	return "", 0
-}
-
 // Вспомогательные функции
 func maxInt(a, b int) int {
 	if a > b {
@@ -1182,7 +847,7 @@ func detectGameEvents(videoPath string, config Config) []ClipSegment {
 	}
 
 	printProgressBar(0, 100, "Detecting game events", "Starting")
-	
+
 	// В реальной системе здесь будет интеграция с API игры
 	// Для примера генерируем случайные события
 	events := []ClipSegment{}
@@ -1199,7 +864,7 @@ func detectGameEvents(videoPath string, config Config) []ClipSegment {
 
 	// Генерируем 5-10 случайных событий
 	numEvents := 5 + rand.Intn(6)
-	
+
 	for i := 0; i < numEvents; i++ {
 		eventTime := rand.Float64() * duration
 		eventType := eventTypes[rand.Intn(len(eventTypes))]
@@ -1217,9 +882,9 @@ func detectGameEvents(videoPath string, config Config) []ClipSegment {
 		progress := (i + 1) * 100 / numEvents
 		printProgressBar(progress, 100, "Detecting game events", "Processing")
 	}
-	
+
 	printProgressBar(100, 100, "Detecting game events", "Complete")
-	
+
 	return events
 }
 
@@ -1283,24 +948,6 @@ func combineEvents(segments []ClipSegment, config Config) []ClipSegment {
 		}
 		merged[i].End += config.HighlightPadding
 
-		// 	// Проверяем минимальную/максимальную длительность
-		// 	duration := merged[i].End - merged[i].Start
-		// 	if duration < config.MinClipDuration {
-		// 		// Расширяем сегмент до минимальной длительности
-		// 		extension := (config.MinClipDuration - duration) / 2
-		// 		merged[i].Start -= extension
-		// 		merged[i].End += extension
-		//
-		// 		if merged[i].Start < 0 {
-		// 			merged[i].End -= merged[i].Start
-		// 			merged[i].Start = 0
-		// 		}
-		// 	} else if duration > config.MaxClipDuration {
-		// 		// Сокращаем до максимальной длительности
-		// 		center := merged[i].Start + duration/2
-		// 		merged[i].Start = center - config.MaxClipDuration/2
-		// 		merged[i].End = center + config.MaxClipDuration/2
-		// 	}
 	}
 
 	return merged
@@ -1508,17 +1155,17 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 		if err != nil {
 			duration = 60
 		}
-		
+
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case <-ticker.C:
 				if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
 					return
 				}
-				
+
 				elapsed := time.Since(startTime).Seconds()
 				progress := int((elapsed / duration) * 100)
 				if progress > 100 {
@@ -1683,7 +1330,7 @@ func detectSpeechActivity(videoPath string, config Config) []ClipSegment {
 		}
 		rms := math.Sqrt(sumSquares / float64(end-i))
 		energies = append(energies, rms)
-		
+
 		// Обновление прогресс-бара
 		progress := int(float64(i) / float64(len(samples)) * 100)
 		printProgressBar(progress, 100, "Detecting speech", "Processing")
