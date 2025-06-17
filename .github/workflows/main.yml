@@ -1,72 +1,38 @@
-name: Go Build and Release
+name: Build and Release
 
 on:
   push:
     tags:
-      - 'v*'  # Запускать при создании тега вида v1.0.0
-
-env:
-  # УКАЖИТЕ ПРАВИЛЬНЫЙ ПУТЬ К ВАШЕМУ MAIN-ПАКЕТУ ЗДЕСЬ ↓
-  MAIN_PKG: "./"  # По умолчанию смотрит в корень проекта
+      - "v*" # Запуск при создании тега (например v1.0.0)
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [linux, windows]
-        arch: [amd64]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: true
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24' # Укажите вашу версию Go
 
-      - name: Debug project structure
-        run: |
-          echo "Current directory: $(pwd)"
-          ls -la
-          echo "MAIN_PKG path: ${{ env.MAIN_PKG }}"
-          if [ -d "${{ env.MAIN_PKG }}" ]; then
-            ls -la "${{ env.MAIN_PKG }}"
-          fi
+    - name: Build for Linux
+      run: |
+        # Сборка для Linux (amd64)
+        GOOS=linux GOARCH=amd64 go build -o myapp-linux-amd64 ./cmd/main
+        
+        # Опционально: сборка для других архитектур
+        GOOS=linux GOARCH=arm64 go build -o myapp-linux-arm64 ./cmd/main
+        
+        # Создаем папку для артефактов
+        mkdir -p artifacts
+        mv myapp-linux-* artifacts/
 
-      - name: Build for ${{ matrix.os }}
-        env:
-          GOOS: ${{ matrix.os }}
-          GOARCH: ${{ matrix.arch }}
-          OUTPUT: myapp-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
-        run: |
-          # Используем переменную MAIN_PKG
-          go build -ldflags="-s -w" -o $OUTPUT "${{ env.MAIN_PKG }}"
-          echo "Built: $(ls -lh $OUTPUT)"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.os }}-binary
-          path: ${{ env.OUTPUT }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          body: |
-            Automated release for ${{ github.ref_name }}
-            Binaries for Linux and Windows
-          files: artifacts/*
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/myapp-linux-*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Автоматический токен
