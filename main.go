@@ -3,16 +3,16 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/md5"
+	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
-	"math/rand"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,42 +26,33 @@ import (
 
 // Конфигурация приложения
 type Config struct {
-	AudioAutoThreshold        bool     `json:"audio_auto_threshold"`
-	MotionAutoThreshold       bool     `json:"motion_auto_threshold"`
-	SpeechThresholdMultiplier float64  `json:"speech_threshold_multiplier"` // 5.0
-	MinSpeechDuration         float64  `json:"min_speech_duration"`         // 0.3
-	MinSilenceDuration        float64  `json:"min_silence_duration"`
-	SpeechStartFrames         int      `json:"speech_start_frames"` // 3
-	SpeechEndFrames           int      `json:"speech_end_frames"`   // 5
-	MaxSpeechGap              float64  `json:"max_speech_gap"`
-	SpeechDetection           bool     `json:"speech_detection"`
-	MinMotionDuration         float64  `json:"min_motion_duration"`
-	NoiseFloor                float64  `json:"noise_floor"` // Уровень фонового шума
-	AudioThreshold            float64  `json:"audio_threshold"`
-	MotionThreshold           float64  `json:"motion_threshold"`
-	FaceDetection             bool     `json:"face_detection"`
-	EmotionDetection          bool     `json:"emotion_detection"`
-	GameEventsEnabled         bool     `json:"game_events_enabled"`
-	MinClipDuration           float64  `json:"min_clip_duration"`
-	MaxClipDuration           float64  `json:"max_clip_duration"`
-	HighlightPadding          float64  `json:"highlight_padding"`
-	OutputResolution          string   `json:"output_resolution"`
-	OutputFPS                 int      `json:"output_fps"`
-	Bitrate                   string   `json:"Bitrate"`
-	Codec                     string   `json:"codec"`
-	ForceReencode             bool     `json:"force_reencode"`
-	FaceCascade               string   `json:"face_cascade"`
-	EmotionModel              string   `json:"emotion_model"`
-	EmotionLabels             []string `json:"emotion_labels"`
-	PositiveEmotions          []string `json:"positive_emotions"`
-	EmotionThreshold          float64  `json:"emotion_threshold"`
-	GameAPIEndpoint           string   `json:"game_api_endpoint"`
-	OutputDir                 string   `json:"output_dir"`
-	TempDir                   string   `json:"temp_dir"`
-	GPUAcceleration           bool     `json:"gpu_acceleration"`
-	PreviewGeneration         bool     `json:"preview_generation"`
-	TransitionDuration        float64  `json:"transition_duration"`
-	DebugMode                 bool     `json:"debug_mode"`
+	AudioAutoThreshold        bool    `json:"audio_auto_threshold"`
+	MotionAutoThreshold       bool    `json:"motion_auto_threshold"`
+	SpeechThresholdMultiplier float64 `json:"speech_threshold_multiplier"` // 5.0
+	MinSpeechDuration         float64 `json:"min_speech_duration"`         // 0.3
+	MinSilenceDuration        float64 `json:"min_silence_duration"`
+	SpeechStartFrames         int     `json:"speech_start_frames"` // 3
+	SpeechEndFrames           int     `json:"speech_end_frames"`   // 5
+	MaxSpeechGap              float64 `json:"max_speech_gap"`
+	SpeechDetection           bool    `json:"speech_detection"`
+	MinMotionDuration         float64 `json:"min_motion_duration"`
+	NoiseFloor                float64 `json:"noise_floor"` // Уровень фонового шума
+	AudioThreshold            float64 `json:"audio_threshold"`
+	MotionThreshold           float64 `json:"motion_threshold"`
+	GameEventsEnabled         bool    `json:"game_events_enabled"`
+	MinClipDuration           float64 `json:"min_clip_duration"`
+	MaxClipDuration           float64 `json:"max_clip_duration"`
+	HighlightPadding          float64 `json:"highlight_padding"`
+	OutputResolution          string  `json:"output_resolution"`
+	OutputFPS                 int     `json:"output_fps"`
+	Bitrate                   string  `json:"Bitrate"`
+	Codec                     string  `json:"codec"`
+	OutputDir                 string  `json:"output_dir"`
+	TempDir                   string  `json:"temp_dir"`
+	GPUAcceleration           bool    `json:"gpu_acceleration"`
+	PreviewGeneration         bool    `json:"preview_generation"`
+	TransitionDuration        float64 `json:"transition_duration"`
+	DebugMode                 bool    `json:"debug_mode"`
 }
 
 // Структура для хранения сегментов видео
@@ -83,42 +74,6 @@ type GameEvent struct {
 	Intensity float64 `json:"intensity"`
 }
 
-// Функция для отображения прогресс-бара (ОБНОВЛЕННАЯ)
-func printProgressBar(iteration, total int, prefix, suffix string) {
-	const length = 20 // Фиксированная длина прогресс-бара
-	percent := float64(iteration) / float64(total) * 100
-	if percent > 100 {
-		percent = 100
-	}
-
-	// Вычисляем позицию стрелки
-	pos := int(float64(length) * percent / 100)
-	if pos > length {
-		pos = length
-	}
-
-	// Создаем строку прогресса
-	bar := make([]rune, length)
-	for i := range bar {
-		switch {
-		case i < pos:
-			bar[i] = '='
-		case i == pos:
-			bar[i] = '→'
-		default:
-			bar[i] = ' '
-		}
-	}
-
-	// Собираем строку
-	progressBar := fmt.Sprintf("[%s] %d%% %s", string(bar), int(percent), suffix)
-	fmt.Printf("\r%s %s", prefix, progressBar)
-
-	if iteration >= total {
-		fmt.Println()
-	}
-}
-
 func main() {
 	// Обработка аргументов командной строки
 	configPath := flag.String("config", "", "Path to config file")
@@ -138,12 +93,12 @@ func main() {
 	}
 
 	// Создание временной директории
-	if err := os.MkdirAll(config.TempDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(config.TempDir, 0750); err != nil {
 		log.Fatalf("Error creating temp dir: %v", err)
 	}
 
 	// Создание выходной директории
-	if err := os.MkdirAll(config.OutputDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(config.OutputDir, 0750); err != nil {
 		log.Fatalf("Error creating output dir: %v", err)
 	}
 
@@ -159,8 +114,6 @@ func main() {
 	fmt.Printf("Config: %+v\n", config)
 
 	// Параллельный анализ
-	var wg sync.WaitGroup
-	wg.Add(2)
 
 	var audioEvents []ClipSegment
 	var videoEvents []ClipSegment
@@ -178,7 +131,6 @@ func main() {
 
 	// Анализ аудио
 	func() {
-		defer wg.Done()
 		audioEvents = detectAudioEvents(*inputVideo, config)
 
 		// Дополнительная детекция речи
@@ -192,19 +144,15 @@ func main() {
 
 	// Анализ видео
 	func() {
-		defer wg.Done()
 		videoEvents = detectVideoEvents(*inputVideo, config)
 		fmt.Printf("\nDetected %d video events\n", len(videoEvents))
 	}()
 
 	// Анализ игровых событий
 	func() {
-		defer wg.Done()
 		gameEvents = detectGameEvents(*inputVideo, config)
 		fmt.Printf("\nDetected %d game events\n", len(gameEvents))
 	}()
-
-	wg.Wait()
 
 	analysisDuration := time.Since(startTime)
 	fmt.Printf("Analysis completed in %s\n", analysisDuration.Round(time.Second))
@@ -271,7 +219,6 @@ func loadConfig(path string) (Config, error) {
 		OutputFPS:                 0,
 		Bitrate:                   "",
 		Codec:                     "libx264",
-		EmotionThreshold:          0.1,
 		OutputDir:                 "output",
 		TempDir:                   "temp",
 		GPUAcceleration:           false,
@@ -280,8 +227,9 @@ func loadConfig(path string) (Config, error) {
 		DebugMode:                 false,
 	}
 
-	if _, err := os.Stat(path); err == nil {
-		data, err := ioutil.ReadFile(path)
+	cleanPath := filepath.Clean(path)
+	if _, err := os.Stat(cleanPath); err == nil {
+		data, err := os.ReadFile(cleanPath)
 		if err != nil {
 			return config, fmt.Errorf("error reading config file: %w", err)
 		}
@@ -300,7 +248,7 @@ func getAudioAnalysisCachePath(videoPath string) string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("audio_analysis_%x.txt", hash))
 }
 
-// Детекция аудио событий (пики громкости) с прогресс-баром
+// Детекция аудио событий (пики громкости)
 func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 	fmt.Print("Analyzing audio: ")
 	cachePath := getAudioAnalysisCachePath(videoPath)
@@ -308,9 +256,12 @@ func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 	var cmd *exec.Cmd
 
 	// Проверяем наличие кэшированных данных
-	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+	cleanCachePath := filepath.Clean(cachePath)
+	if _, err := os.Stat(cleanCachePath); os.IsNotExist(err) {
 		// Создаем команду FFmpeg с анализом частот речи
-		cmd = exec.Command(
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, // #nosec G204
 			"ffmpeg",
 			"-i", videoPath,
 			"-filter_complex", "astats=metadata=1:reset=1,ametadata=mode=print:key=lavfi.astats.Overall.RMS_level",
@@ -323,11 +274,15 @@ func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 			return nil
 		}
 
-		cacheFile, err := os.Create(cachePath)
+		cacheFile, err := os.Create(cleanCachePath)
 		if err != nil {
 			log.Printf("Cache creation error: %v", err)
 		}
-		defer cacheFile.Close()
+		defer func() {
+			if err := cacheFile.Close(); err != nil {
+				log.Printf("Error closing cache file: %v", err)
+			}
+		}()
 
 		if err := cmd.Start(); err != nil {
 			log.Printf("Audio detection error: %v", err)
@@ -338,12 +293,16 @@ func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 		scanner = bufio.NewScanner(tee)
 	} else {
 		fmt.Print("Using cached data")
-		file, err := os.Open(cachePath)
+		file, err := os.Open(cleanCachePath)
 		if err != nil {
 			log.Printf("Cache open error: %v", err)
 			return nil
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.Printf("Error closing cache file: %v", err)
+			}
+		}()
 		scanner = bufio.NewScanner(file)
 	}
 
@@ -361,7 +320,6 @@ func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		// log.Println(line)
 
 		if matches := reTime.FindStringSubmatch(line); matches != nil {
 			if time, err := strconv.ParseFloat(matches[1], 64); err == nil {
@@ -464,12 +422,13 @@ func detectAudioEvents(videoPath string, config Config) []ClipSegment {
 	if cmd != nil {
 		if err := cmd.Wait(); err != nil {
 			log.Printf("Audio detection finished with error: %v", err)
-			os.Remove(cachePath)
+			if err := os.Remove(cleanCachePath); err != nil {
+				log.Printf("Failed to remove cache file: %v", err)
+			}
 		}
 	}
 
-	printProgressBar(100, 100, "Analyzing audio", "Complete")
-	fmt.Printf("Detected %d audio events\n", len(events))
+	fmt.Printf("\rAnalyzing audio: [%d events detected]%s\n", len(events), strings.Repeat(" ", 30))
 	return events
 }
 
@@ -510,15 +469,14 @@ func mergeCloseAudioEvents(events []ClipSegment, maxGap float64) []ClipSegment {
 func detectVideoEvents(videoPath string, config Config) []ClipSegment {
 	fmt.Println("Detecting video events...")
 	// Генерируем уникальный хеш для конфигурации
-	configHash := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf(
-		"%.4f|%.4f|%t",
+	configHash := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf(
+		"%.4f|%.4f",
 		config.MotionThreshold,
 		config.HighlightPadding,
-		config.FaceDetection,
 	))))
 
 	// Формируем имя кэш-файла
-	cacheFileName := fmt.Sprintf("%s.video_events.%s.json", videoPath, configHash[:8])
+	cacheFileName := filepath.Clean(fmt.Sprintf("%s.video_events.%s.json", videoPath, configHash[:8]))
 
 	// Пытаемся прочитать данные из кэша
 	if cacheData, err := os.ReadFile(cacheFileName); err == nil {
@@ -537,7 +495,9 @@ func detectVideoEvents(videoPath string, config Config) []ClipSegment {
 	events := []ClipSegment{}
 
 	// Детекция движения
+	fmt.Print("  Motion detection: ")
 	motionEvents := detectMotionFFmpeg(videoPath, config)
+	fmt.Print("\r  Motion detection: complete\n")
 	for _, t := range motionEvents {
 		events = append(events, ClipSegment{
 			Start: maxFloat(0, t-config.HighlightPadding),
@@ -549,7 +509,7 @@ func detectVideoEvents(videoPath string, config Config) []ClipSegment {
 
 	// Сохраняем результаты в кэш
 	if jsonData, err := json.MarshalIndent(events, "", "  "); err == nil {
-		if err := os.WriteFile(cacheFileName, jsonData, 0644); err == nil {
+		if err := os.WriteFile(cacheFileName, jsonData, 0600); err == nil {
 			log.Printf("Saved %d video events to cache: %s",
 				len(events), cacheFileName)
 		} else {
@@ -570,8 +530,8 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 
 	// Сбор данных для автоматического определения порога
 	if autoThreshold {
-		printProgressBar(0, 100, "  Calculating motion threshold", "Starting")
-		cmd := exec.Command(
+		fmt.Print("Calculating motion threshold...")
+		cmd := exec.Command( // #nosec G204
 			"ffmpeg",
 			"-i", videoPath,
 			"-vf", "select='gt(scene,0)',metadata=print",
@@ -615,7 +575,6 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 			if threshold > 1.0 {
 				threshold = 1.0
 			}
-			printProgressBar(100, 100, "  Calculating motion threshold", "Complete")
 			fmt.Printf("\rCalculating motion threshold: %.4f (based on %d samples)\n",
 				threshold, len(sceneValues))
 		} else {
@@ -627,13 +586,13 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 	}
 
 	// Генерация уникального хеша для кэша
-	configHash := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf(
+	configHash := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf(
 		"%.4f|%s|%t",
 		threshold,
 		config.Codec,
 		autoThreshold,
 	))))
-	cacheFileName := fmt.Sprintf("%s.motion_events.%s.json", videoPath, configHash[:8])
+	cacheFileName := filepath.Clean(fmt.Sprintf("%s.motion_events.%s.json", videoPath, configHash[:8]))
 
 	// Проверка кэша
 	if cacheData, err := os.ReadFile(cacheFileName); err == nil {
@@ -645,8 +604,8 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 	}
 
 	// Детекция движения
-	printProgressBar(0, 100, "  Detecting motion events", "Starting")
-	cmd := exec.Command(
+	fmt.Print("  Detecting motion events: ")
+	cmd := exec.Command( // #nosec G204
 		"ffmpeg",
 		"-i", videoPath,
 		"-vf", fmt.Sprintf("select='gt(scene\\,%f)',metadata=print", threshold),
@@ -688,21 +647,12 @@ func detectMotionFFmpeg(videoPath string, config Config) []float64 {
 
 	// Сохранение в кэш
 	if jsonData, err := json.MarshalIndent(groupedEvents, "", "  "); err == nil {
-		func() error {
-			f, err := os.OpenFile(cacheFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-			if err != nil {
-				return err
-			}
-			_, err = f.Write(jsonData)
-			if err1 := f.Close(); err1 != nil && err == nil {
-				err = err1
-			}
-			return err
-		}()
+		if writeErr := os.WriteFile(cacheFileName, jsonData, 0600); writeErr != nil {
+			log.Printf("Failed to save motion events cache: %v", writeErr)
+		}
 	}
 
-	printProgressBar(100, 100, "  Detecting motion events", "Complete")
-	fmt.Printf("Detected %d motion events\n", len(groupedEvents))
+	fmt.Printf("\r  Detecting motion events: [%d events detected]%s\n", len(groupedEvents), strings.Repeat(" ", 30))
 	return groupedEvents
 }
 
@@ -745,15 +695,32 @@ func maxFloat(a, b float64) float64 {
 	return b
 }
 
+// Генерация безопасных случайных чисел
+func secureRandIntn(n int) int {
+	num, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		log.Printf("Secure random error: %v", err)
+		return 0
+	}
+	return int(num.Int64())
+}
 
-// Детекция игровых событий (имитация) с прогресс-баром
+func secureRandFloat() float64 {
+	num, err := rand.Int(rand.Reader, big.NewInt(1<<53))
+	if err != nil {
+		log.Printf("Secure random error: %v", err)
+		return 0.5
+	}
+	return float64(num.Int64()) / (1 << 53)
+}
+
+// Детекция игровых событий (имитация)
 func detectGameEvents(videoPath string, config Config) []ClipSegment {
 	if !config.GameEventsEnabled {
 		return nil
 	}
 
-	printProgressBar(0, 100, "Detecting game events", "Starting")
-
+	fmt.Print("Detecting game events: ")
 	// В реальной системе здесь будет интеграция с API игры
 	// Для примера генерируем случайные события
 	events := []ClipSegment{}
@@ -769,12 +736,11 @@ func detectGameEvents(videoPath string, config Config) []ClipSegment {
 	eventTypes := []string{"kill", "death", "victory", "defeat", "achievement"}
 
 	// Генерируем 5-10 случайных событий
-	numEvents := 5 + rand.Intn(6)
-
+	numEvents := 5 + secureRandIntn(6)
 	for i := 0; i < numEvents; i++ {
-		eventTime := rand.Float64() * duration
-		eventType := eventTypes[rand.Intn(len(eventTypes))]
-		intensity := 0.5 + rand.Float64()*0.5 // 0.5-1.0
+		eventTime := secureRandFloat() * duration
+		eventType := eventTypes[secureRandIntn(len(eventTypes))]
+		intensity := 0.5 + secureRandFloat()*0.5 // 0.5-1.0
 
 		events = append(events, ClipSegment{
 			Start:   eventTime - config.HighlightPadding,
@@ -784,19 +750,14 @@ func detectGameEvents(videoPath string, config Config) []ClipSegment {
 			Details: fmt.Sprintf("Game event: %s", eventType),
 		})
 
-		// Обновление прогресс-бара
-		progress := (i + 1) * 100 / numEvents
-		printProgressBar(progress, 100, "Detecting game events", "Processing")
 	}
-
-	printProgressBar(100, 100, "Detecting game events", "Complete")
 
 	return events
 }
 
 // Получение длительности видео
 func getVideoDuration(videoPath string) (float64, error) {
-	cmd := exec.Command(
+	cmd := exec.Command( // #nosec G204
 		"ffprobe",
 		"-v", "error",
 		"-show_entries", "format=duration",
@@ -921,11 +882,14 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 
 	// Создаем временную директорию для клипов
 	clipsDir := filepath.Join(absTempDir, "clips")
-	// os.RemoveAll(clipsDir)
-	if err := os.MkdirAll(clipsDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(clipsDir, 0750); err != nil {
 		return fmt.Errorf("error creating clips directory: %w", err)
 	}
-	// defer os.RemoveAll(clipsDir)
+	defer func() {
+		if err := os.RemoveAll(clipsDir); err != nil {
+			log.Printf("Error deleting clips directory: %v", err)
+		}
+	}()
 
 	var clipFiles []string
 	var wg sync.WaitGroup
@@ -942,8 +906,14 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 		total := len(segments)
 		for range progressChan {
 			completed++
-			printProgressBar(completed, total, "  Rendering segments", "Processing")
+			percent := completed * 100 / total
+			bars := percent / 2
+			fmt.Printf("\r  [%s%s] %d%%",
+				strings.Repeat("=", bars),
+				strings.Repeat(" ", 50-bars),
+				percent)
 		}
+		fmt.Println("\nSegments extraction complete")
 	}()
 
 	for i, seg := range segments {
@@ -958,7 +928,7 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 			clipPath := filepath.Join(clipsDir, fmt.Sprintf("clip_%d.mp4", idx))
 			duration := segment.End - segment.Start
 
-			cmd := exec.Command(
+			cmd := exec.Command( // #nosec G204
 				"ffmpeg",
 				"-ss", fmt.Sprintf("%.2f", segment.Start),
 				"-t", fmt.Sprintf("%.2f", duration),
@@ -1013,27 +983,38 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 
 	// Создаем файл списка для конкатенации
 	listFile := filepath.Join(absTempDir, "clips.txt")
-	list, err := os.Create(listFile)
+	list, err := os.Create(filepath.Clean(listFile)) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("error creating list file: %w", err)
 	}
-	defer os.Remove(listFile)
+	defer func() {
+		if err := list.Close(); err != nil {
+			log.Printf("Error closing list file: %v", err)
+		}
+		if err := os.Remove(listFile); err != nil {
+			log.Printf("Error removing list file: %v", err)
+		}
+	}()
 
 	for _, clip := range clipFiles {
 		absClip, _ := filepath.Abs(clip)
 		fmt.Fprintf(list, "file '%s'\n", absClip)
 	}
-	list.Close()
+
+	// Явное закрытие файла для гарантии записи
+	if err := list.Close(); err != nil {
+		return fmt.Errorf("error closing list file: %w", err)
+	}
 
 	// Проверяем существование списка файлов
 	if _, err := os.Stat(listFile); os.IsNotExist(err) {
 		return fmt.Errorf("list file not created: %s", listFile)
 	}
 
-	// var args []string
+	var args []string
 
 	// Если нужно добавить переходы и клипов больше одного
-	args := []string{
+	args = []string{
 		"-f", "concat",
 		"-safe", "0",
 		"-i", listFile,
@@ -1044,11 +1025,13 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 		"-y",
 		absOutputPath,
 	}
-	args = append(args, "-hwaccel", "cuda", "-hwaccel_output_format", "cuda")
+	if config.GPUAcceleration {
+		args = append(args, "-hwaccel", "cuda", "-hwaccel_output_format", "cuda")
+	}
 
 	// Выполняем сборку финального видео
-	printProgressBar(0, 100, "  Assembling final video", "Starting")
-	cmd := exec.Command("ffmpeg", args...)
+	fmt.Print("  Assembling final video...")
+	cmd := exec.Command("ffmpeg", args...) // #nosec G204
 	log.Println("Assembling final video:", cmd.String())
 
 	var stderr bytes.Buffer
@@ -1058,13 +1041,15 @@ func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath strin
 		log.Printf("\rFFmpeg error output:\n%s", stderr.String())
 		return fmt.Errorf("video assembly failed: %w", err)
 	}
-	printProgressBar(100, 100, "  Assembling final video", "Complete")
+	fmt.Printf("\r  Assembling final video: [completed]%s\n", strings.Repeat(" ", 30))
 
 	// Удаляем временные клипы после успешной сборки
 	for _, clip := range clipFiles {
-		os.Remove(clip)
+		if err := os.Remove(clip); err != nil {
+			log.Printf("Error deleting temporary clip: %s", clip)
+			continue
+		}
 	}
-	os.RemoveAll(clipsDir)
 
 	return nil
 }
@@ -1086,12 +1071,16 @@ func generatePreview(inputPath, outputPath string) error {
 	// Ускоряем видео в 4 раза
 	speedFactor := 4.0
 
-	cmd := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, // #nosec G204
 		"ffmpeg",
 		"-i", inputPath,
 		"-t", fmt.Sprintf("%.2f", previewDuration),
 		"-vf", fmt.Sprintf("setpts=%.2f*PTS", 1/speedFactor),
 		"-af", fmt.Sprintf("atempo=%.2f", speedFactor),
+		"-preset", "veryfast",
 		"-c:a", "aac",
 		"-b:a", "64k",
 		"-y",
@@ -1100,20 +1089,10 @@ func generatePreview(inputPath, outputPath string) error {
 
 	log.Println("Generating preview:", cmd.String())
 
-	// Прогресс-бар для генерации превью
-	printProgressBar(0, 100, "  Generating preview", "Starting")
-	go func() {
-		for i := 0; i <= 100; i += 5 {
-			printProgressBar(i, 100, "  Generating preview", "Processing")
-			time.Sleep(200 * time.Millisecond)
-		}
-	}()
-
 	if output, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Preview generation error:\n%s", string(output))
 		return err
 	}
-	printProgressBar(100, 100, "  Generating preview", "Complete")
 
 	return nil
 }
@@ -1125,16 +1104,12 @@ func saveSegments(segments []ClipSegment, path string) error {
 		return fmt.Errorf("error marshaling segments: %w", err)
 	}
 
-	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+	cleanPath := filepath.Clean(path)
+	if err := os.WriteFile(cleanPath, data, 0600); err != nil {
 		return fmt.Errorf("error writing segments file: %w", err)
 	}
 
 	return nil
-}
-
-// Вспомогательная функция для генерации случайных чисел
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 func getSpeechCachePath(videoPath string, config Config) string {
@@ -1144,15 +1119,14 @@ func getSpeechCachePath(videoPath string, config Config) string {
 
 // Детекция речевой активности с помощью WebRTC VAD
 func detectSpeechActivity(videoPath string, config Config) []ClipSegment {
-	printProgressBar(0, 100, "Detecting speech", "Starting")
 	cachePath := getSpeechCachePath(videoPath, config)
+	cleanCachePath := filepath.Clean(cachePath)
 
 	// Попытка загрузить из кэша
-	if data, err := os.ReadFile(cachePath); err == nil {
+	if data, err := os.ReadFile(cleanCachePath); err == nil {
 		var cached []ClipSegment
 		if err := json.Unmarshal(data, &cached); err == nil {
-			printProgressBar(100, 100, "Detecting speech", "Complete (cached)")
-			log.Printf("Loaded cached speech segments: %d from %s", len(cached), cachePath)
+			log.Printf("Loaded cached speech segments: %d from %s", len(cached), cleanCachePath)
 			return cached
 		} else {
 			log.Printf("Failed to parse speech cache: %v", err)
@@ -1161,9 +1135,14 @@ func detectSpeechActivity(videoPath string, config Config) []ClipSegment {
 
 	// Создаем временный RAW файл
 	tempRaw := filepath.Join(config.TempDir, "audio_temp.raw")
-	defer os.Remove(tempRaw)
+	cleanTempRaw := filepath.Clean(tempRaw)
+	defer func() {
+		if err := os.Remove(cleanTempRaw); err != nil {
+			log.Printf("Error removing temp raw file: %v", err)
+		}
+	}()
 
-	cmd := exec.Command(
+	cmd := exec.Command( // #nosec G204
 		"ffmpeg",
 		"-i", videoPath,
 		"-ac", "1",
@@ -1172,14 +1151,14 @@ func detectSpeechActivity(videoPath string, config Config) []ClipSegment {
 		"-acodec", "pcm_s16le",
 		"-f", "s16le",
 		"-y",
-		tempRaw,
+		cleanTempRaw,
 	)
 	if err := cmd.Run(); err != nil {
 		log.Printf("Audio conversion error: %v", err)
 		return nil
 	}
 
-	data, err := os.ReadFile(tempRaw)
+	data, err := os.ReadFile(cleanTempRaw)
 	if err != nil || len(data) == 0 {
 		log.Printf("Error reading RAW file or empty data")
 		return nil
@@ -1208,10 +1187,6 @@ func detectSpeechActivity(videoPath string, config Config) []ClipSegment {
 		}
 		rms := math.Sqrt(sumSquares / float64(end-i))
 		energies = append(energies, rms)
-
-		// Обновление прогресс-бара
-		progress := int(float64(i) / float64(len(samples)) * 100)
-		printProgressBar(progress, 100, "Detecting speech", "Processing")
 	}
 
 	if len(energies) == 0 {
@@ -1291,12 +1266,11 @@ func detectSpeechActivity(videoPath string, config Config) []ClipSegment {
 
 	// Сохраняем в кэш
 	if jsonData, err := json.MarshalIndent(segments, "", "  "); err == nil {
-		_ = os.WriteFile(cachePath, jsonData, 0644)
+		_ = os.WriteFile(cleanCachePath, jsonData, 0600)
 	} else {
 		log.Printf("Failed to write speech cache: %v", err)
 	}
 
-	printProgressBar(100, 100, "Detecting speech", "Complete")
 	return segments
 }
 
