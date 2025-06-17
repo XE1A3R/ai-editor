@@ -46,7 +46,7 @@
 - ai-editor -input input_video.mp4 [-config config.json] [-output output_name]
 
 
-## Пример конфиг файла
+## Пример конфигурации файла
 ```json
 {
   "audio_auto_threshold": true,
