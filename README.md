@@ -78,7 +78,7 @@
 | audio_auto_threshold | bool	| Автоматическое определение порога звука |
 |motion_auto_threshold | bool	| Автоматическое определение порога движения |
 | highlight_padding | float | Дополнительное время вокруг событий (в секундах) |
-| transition_duration | | float |	Длительность переходов между клипами |
+| transition_duration | | float | Длительность переходов между клипами |
 | preview_generation | bool | Генерация ускоренного превью-видео |
 
 
