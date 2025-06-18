@@ -26,24 +26,24 @@ import (
 
 // Конфигурация приложения
 type Config struct {
-	AudioAutoThreshold        bool    `json:"audio_auto_threshold"`
-	MotionAutoThreshold       bool    `json:"motion_auto_threshold"`
-	AudioThreshold            float64 `json:"audio_threshold"`
-	MotionThreshold           float64 `json:"motion_threshold"`
-	SpeechThresholdMultiplier float64 `json:"speech_threshold_multiplier"` // 5.0
-	MinSpeechDuration         float64 `json:"min_speech_duration"`         // 0.3
-	MinSilenceDuration        float64 `json:"min_silence_duration"`
-	MaxSpeechGap              float64 `json:"max_speech_gap"`
-	SpeechDetection           bool    `json:"speech_detection"`
-	NoiseFloor                float64 `json:"noise_floor"` // Уровень фонового шума
-	GameEventsEnabled         bool    `json:"game_events_enabled"`
-	HighlightPadding          float64 `json:"highlight_padding"`
-	Codec_Args				  []string `json:"Codec_Args"` // Дополнительные аргументы кодека
-	GPUAcceleration		      []string `json:"gpu_acceleration"` // Использовать GPU для видео обработки
-	OutputDir                 string  `json:"output_dir"`
-	TempDir                   string  `json:"temp_dir"`
-	PreviewGeneration         bool    `json:"preview_generation"`
-	TransitionDuration        float64 `json:"transition_duration"`
+	AudioAutoThreshold        bool     `json:"audio_auto_threshold"`
+	MotionAutoThreshold       bool     `json:"motion_auto_threshold"`
+	AudioThreshold            float64  `json:"audio_threshold"`
+	MotionThreshold           float64  `json:"motion_threshold"`
+	SpeechThresholdMultiplier float64  `json:"speech_threshold_multiplier"` // 5.0
+	MinSpeechDuration         float64  `json:"min_speech_duration"`         // 0.3
+	MinSilenceDuration        float64  `json:"min_silence_duration"`
+	MaxSpeechGap              float64  `json:"max_speech_gap"`
+	SpeechDetection           bool     `json:"speech_detection"`
+	NoiseFloor                float64  `json:"noise_floor"` // Уровень фонового шума
+	GameEventsEnabled         bool     `json:"game_events_enabled"`
+	HighlightPadding          float64  `json:"highlight_padding"`
+	Codec_Args                []string `json:"Codec_Args"`          // Дополнительные аргументы кодека
+	GPUAcceleration           []string `json:"gpu_acceleration"`    // Использовать GPU для видео обработки
+	OutputDir                 string   `json:"output_dir"`
+	TempDir                   string   `json:"temp_dir"`
+	PreviewGeneration         bool     `json:"preview_generation"`
+	TransitionDuration        float64  `json:"transition_duration"`
 }
 
 // Структура для хранения сегментов видео
@@ -851,152 +851,151 @@ func combineEvents_mergeted(segments []ClipSegment, config Config) []ClipSegment
 }
 
 func renderFinalVideo(inputPath string, segments []ClipSegment, outputPath string, config Config) error {
-    if len(segments) == 0 {
-        return fmt.Errorf("no segments to render")
-    }
+	if len(segments) == 0 {
+		return fmt.Errorf("no segments to render")
+	}
 
-    absInputPath, _ := filepath.Abs(inputPath)
-    absOutputPath, _ := filepath.Abs(outputPath)
-    absTempDir, _ := filepath.Abs(config.TempDir)
+	absInputPath, _ := filepath.Abs(inputPath)
+	absOutputPath, _ := filepath.Abs(outputPath)
+	absTempDir, _ := filepath.Abs(config.TempDir)
 
-    // Создание временной директории
-    clipsDir := filepath.Join(absTempDir, "clips")
-    if err := os.MkdirAll(clipsDir, 0750); err != nil {
-        return fmt.Errorf("error creating clips directory: %w", err)
-    }
-    defer os.RemoveAll(clipsDir)
+	// Создание временной директории
+	clipsDir := filepath.Join(absTempDir, "clips")
+	if err := os.MkdirAll(clipsDir, 0750); err != nil {
+		return fmt.Errorf("error creating clips directory: %w", err)
+	}
+	defer os.RemoveAll(clipsDir)
 
-    var clipFiles []string
-    var wg sync.WaitGroup
-    var mu sync.Mutex
-    errorOccurred := false
+	var clipFiles []string
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	errorOccurred := false
 
-    // Канал для отслеживания прогресса
-    progressChan := make(chan int, len(segments))
-    go func() {
-        completed := 0
-        total := len(segments)
-        for range progressChan {
-            completed++
-            percent := completed * 100 / total
-            bars := percent / 2
-            fmt.Printf("\rExtracting [%s%s] %d%%", 
-                strings.Repeat("=", bars), 
-                strings.Repeat(" ", 50-bars), 
-                percent)
-        }
-        fmt.Println("\nSegments extraction complete")
-    }()
+	// Канал для отслеживания прогресса
+	progressChan := make(chan int, len(segments))
+	go func() {
+		completed := 0
+		total := len(segments)
+		for range progressChan {
+			completed++
+			percent := completed * 100 / total
+			bars := percent / 2
+			fmt.Printf("\rExtracting [%s%s] %d%%", 
+				strings.Repeat("=", bars), 
+				strings.Repeat(" ", 50-bars), 
+				percent)
+		}
+		fmt.Println("\nSegments extraction complete")
+	}()
 
 	sem := make(chan struct{}, runtime.NumCPU()/4)
 
-    // Извлечение сегментов с перекодированием
-    for i, seg := range segments {
-        if seg.End <= seg.Start {
-            continue
-        }
+	// Извлечение сегментов с перекодированием
+	for i, seg := range segments {
+		if seg.End <= seg.Start {
+			continue
+		}
 
-        wg.Add(1)
-        go func(idx int, segment ClipSegment) {
+		wg.Add(1)
+		go func(idx int, segment ClipSegment) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
-            defer wg.Done()
-            clipPath := filepath.Join(clipsDir, fmt.Sprintf("clip_%04d.mp4", idx))
-            duration := segment.End - segment.Start
+			defer wg.Done()
+			clipPath := filepath.Join(clipsDir, fmt.Sprintf("clip_%04d.mp4", idx))
+			duration := segment.End - segment.Start
 
-            // Формируем базовые аргументы
-            args := []string{
-                "-loglevel", "warning",
-                "-ss", fmt.Sprintf("%.6f", segment.Start),
-                "-i", absInputPath,
-                "-t", fmt.Sprintf("%.6f", duration),
-                "-avoid_negative_ts", "make_zero",
-                "-fflags", "+genpts",
-                "-fps_mode", "cfr",
-            }
+			// Формируем базовые аргументы
+			args := []string{
+				"-loglevel", "warning",
+				"-ss", fmt.Sprintf("%.6f", segment.Start),
+				"-i", absInputPath,
+				"-t", fmt.Sprintf("%.6f", duration),
+				"-avoid_negative_ts", "make_zero",
+				"-fflags", "+genpts",
+				"-fps_mode", "cfr",
+			}
 
-			
-            args = append(config.GPUAcceleration, args...)
-			
+			args = append(config.GPUAcceleration, args...)
+			args = append(args, config.Codec_Args...)
 
+			// Добавляем параметры кодирования
+			args = append(args,
+				"-x264-params", "keyint=30:min-keyint=30:scenecut=0",
+				"-c:a", "aac",
+				"-y",
+				clipPath,
+			)
 
-			args = append(args,config.Codec_Args...)
+			cmd := exec.Command("ffmpeg", args...) // #nosec G204
+			if output, err := cmd.CombinedOutput(); err != nil {
+				log.Printf("Clip extraction failed for segment %d: %v\n%s", idx, err, string(output))
+				mu.Lock()
+				errorOccurred = true
+				mu.Unlock()
+				return
+			}
 
-            // Добавляем параметры кодирования
-            args = append(args,
-                "-x264-params", "keyint=30:min-keyint=30:scenecut=0",
-                "-c:a", "aac",
-                "-y",
-                clipPath,
-            )
+			if _, err := os.Stat(clipPath); err == nil {
+				mu.Lock()
+				clipFiles = append(clipFiles, clipPath)
+				mu.Unlock()
+			}
+			progressChan <- 1
+		}(i, seg)
+	}
 
-            cmd := exec.Command("ffmpeg", args...)
-            if output, err := cmd.CombinedOutput(); err != nil {
-                log.Printf("Clip extraction failed for segment %d: %v\n%s", idx, err, string(output))
-                mu.Lock()
-                errorOccurred = true
-                mu.Unlock()
-                return
-            }
+	wg.Wait()
+	close(progressChan)
+	if errorOccurred {
+		log.Println("Warning: some segments failed extraction")
+	}
+	if len(clipFiles) == 0 {
+		return fmt.Errorf("no valid segments extracted")
+	}
 
-            if _, err := os.Stat(clipPath); err == nil {
-                mu.Lock()
-                clipFiles = append(clipFiles, clipPath)
-                mu.Unlock()
-            }
-            progressChan <- 1
-        }(i, seg)
-    }
+	// Сортировка файлов по порядку
+	sort.Slice(clipFiles, func(i, j int) bool {
+		numI := regexp.MustCompile(`clip_(\d+)`).FindStringSubmatch(filepath.Base(clipFiles[i]))[1]
+		numJ := regexp.MustCompile(`clip_(\d+)`).FindStringSubmatch(filepath.Base(clipFiles[j]))[1]
+		return numI < numJ
+	})
 
-    wg.Wait()
-    close(progressChan)
-    if errorOccurred {
-        log.Println("Warning: some segments failed extraction")
-    }
-    if len(clipFiles) == 0 {
-        return fmt.Errorf("no valid segments extracted")
-    }
+	// Создание списка файлов
+	listFile := filepath.Join(absTempDir, "input.txt")
+	cleanListFile := filepath.Clean(listFile)
+	file, err := os.Create(cleanListFile)
+	if err != nil {
+		return fmt.Errorf("error creating list file: %w", err)
+	}
+	defer os.Remove(cleanListFile)
+	
+	for _, clip := range clipFiles {
+		absClip, _ := filepath.Abs(clip)
+		fmt.Fprintf(file, "file '%s'\n", absClip)
+	}
+	if err := file.Close(); err != nil {
+		log.Printf("Error closing file %s: %v", cleanListFile, err)
+	}
 
-    // Сортировка файлов по порядку
-    sort.Slice(clipFiles, func(i, j int) bool {
-        numI := regexp.MustCompile(`clip_(\d+)`).FindStringSubmatch(filepath.Base(clipFiles[i]))[1]
-        numJ := regexp.MustCompile(`clip_(\d+)`).FindStringSubmatch(filepath.Base(clipFiles[j]))[1]
-        return numI < numJ
-    })
+	// Сборка финального видео
+	args := []string{
+		"-f", "concat",
+		"-safe", "0",
+		"-i", cleanListFile,
+		"-c", "copy",           // Безопасное копирование после перекодирования
+		"-fflags", "+genpts",    // Восстановление временных меток
+		"-y",
+		absOutputPath,
+	}
 
-    // Создание списка файлов
-    listFile := filepath.Join(absTempDir, "input.txt")
-    file, err := os.Create(listFile)
-    if err != nil {
-        return fmt.Errorf("error creating list file: %w", err)
-    }
-    defer os.Remove(listFile)
-    
-    for _, clip := range clipFiles {
-        absClip, _ := filepath.Abs(clip)
-        fmt.Fprintf(file, "file '%s'\n", absClip)
-    }
-    file.Close()
-
-    // Сборка финального видео
-    args := []string{
-        "-f", "concat",
-        "-safe", "0",
-        "-i", listFile,
-        "-c", "copy",           // Безопасное копирование после перекодирования
-        "-fflags", "+genpts",    // Восстановление временных меток
-        "-y",
-        absOutputPath,
-    }
-
-    fmt.Print("Assembling final video...")
-    cmd := exec.Command("ffmpeg", args...)
-    if output, err := cmd.CombinedOutput(); err != nil {
-        log.Printf("Assembly failed: %v\n%s", err, string(output))
-        return fmt.Errorf("video assembly failed: %w", err)
-    }
-    fmt.Println("\rFinal video assembly completed")
-    return nil
+	fmt.Print("Assembling final video...")
+	cmd := exec.Command("ffmpeg", args...) // #nosec G204
+	if output, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Assembly failed: %v\n%s", err, string(output))
+		return fmt.Errorf("video assembly failed: %w", err)
+	}
+	fmt.Println("\rFinal video assembly completed")
+	return nil
 } 
 
 // Генерация превью-видео (короткая версия)
